@@ -99,3 +99,4 @@ ENV/
 
 # mypy
 .mypy_cache/
+micropython-on-wemos-d1-mini.pdf
