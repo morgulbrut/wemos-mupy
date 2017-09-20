@@ -1,63 +1,33 @@
-try:
-    import usocket as socket
-except:
-    import socket
+import machine
+pins = [machine.Pin(i, machine.Pin.IN) for i in (0, 2, 4, 5, 12, 13, 14, 15)]
 
-
-CONTENT = b"""\
-HTTP/1.0 200 OK
-Hello #%d from MicroPython!
+html = """<!DOCTYPE html>
+<html>
+    <head> <title>ESP8266 Pins</title> </head>
+    <body> <h1>ESP8266 Pins</h1>
+        <table border="1"> <tr><th>Pin</th><th>Value</th></tr> %s </table>
+    </body>
+</html>
 """
 
-def main(micropython_optimize=False):
-    s = socket.socket()
+import socket
+addr = socket.getaddrinfo('0.0.0.0', 80)[0][-1]
 
-    # Binding to all interfaces - server will be accessible to other hosts!
-    ai = socket.getaddrinfo("0.0.0.0", 8080)
-    print("Bind address info:", ai)
-    addr = ai[0][-1]
+s = socket.socket()
+s.bind(addr)
+s.listen(1)
 
-    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    s.bind(addr)
-    s.listen(5)
-    print("Listening, connect your browser to http://<this_host>:8080/")
+print('listening on', addr)
 
-    counter = 0
+while True:
+    cl, addr = s.accept()
+    print('client connected from', addr)
+    cl_file = cl.makefile('rwb', 0)
     while True:
-        res = s.accept()
-        client_sock = res[0]
-        client_addr = res[1]
-        print("Client address:", client_addr)
-        print("Client socket:", client_sock)
-
-        if not micropython_optimize:
-            # To read line-oriented protocol (like HTTP) from a socket (and
-            # avoid short read problem), it must be wrapped in a stream (aka
-            # file-like) object. That's how you do it in CPython:
-            client_stream = client_sock.makefile("rwb")
-        else:
-            # .. but MicroPython socket objects support stream interface
-            # directly, so calling .makefile() method is not required. If
-            # you develop application which will run only on MicroPython,
-            # especially on a resource-constrained embedded device, you
-            # may take this shortcut to save resources.
-            client_stream = client_sock
-
-        print("Request:")
-        req = client_stream.readline()
-        print(req)
-        while True:
-            h = client_stream.readline()
-            if h == b"" or h == b"\r\n":
-                break
-            print(h)
-        client_stream.write(CONTENT % counter)
-
-        client_stream.close()
-        if not micropython_optimize:
-            client_sock.close()
-        counter += 1
-        print()
-
-
-main()
+        line = cl_file.readline()
+        if not line or line == b'\r\n':
+            break
+    rows = ['<tr><td>%s</td><td>%d</td></tr>' % (str(p), p.value()) for p in pins]
+    response = html % '\n'.join(rows)
+    cl.send(response)
+    cl.close()
